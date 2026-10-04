@@ -1,0 +1,20 @@
+{
+  "name": "gmail-processor",
+  "private": true,
+  "description": "Gmail 帳單自動解密存檔 + 清理（Google Apps Script）",
+  "scripts": {
+    "login": "clasp login",
+    "create": "clasp create --type standalone --title \"Gmail 帳單處理\" --rootDir src",
+    "pull": "clasp pull",
+    "push": "clasp push",
+    "open": "clasp open",
+    "logs": "clasp logs",
+    "build:pdf-lib": "esbuild scripts/pdf-lib-entry.js --bundle --format=iife --global-name=PDFLib --target=es2019 --platform=neutral --main-fields=module,main --minify --legal-comments=inline --outfile=src/pdf-lib.js"
+  },
+  "devDependencies": {
+    "@cantoo/pdf-lib": "2.9.1",
+    "@google/clasp": "^2.4.2",
+    "@types/google-apps-script": "^1.0.83",
+    "esbuild": "^0.28.2"
+  }
+}

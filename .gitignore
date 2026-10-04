@@ -1,0 +1,5 @@
+node_modules/
+.clasp.json
+.clasprc.json
+# 由 npm run build:pdf-lib 產生
+src/pdf-lib.js
