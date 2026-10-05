@@ -13,14 +13,15 @@ npm run build:pdf-lib   # 打包 @cantoo/pdf-lib → src/pdf-lib.js（已 gitign
 npm run push            # clasp push（只推 src/ 底下的 appsscript.json 與 .js/.gs）
 npm run pull / open / logs
 npx clasp status        # 確認會被推送的檔案
-node --check src/processor.js   # 本機語法檢查
+node --check src/config.js      # 本機語法檢查（一次只能檢查一個檔案）
+node --check src/processor.js
 ```
 
-沒有測試框架。程式只能在 Apps Script 上實際執行（`runBillProcessor`、`cleanupProcessedThreads`、`setupTriggers`）。本機驗證的做法是用 Node 載入 `src/processor.js`，以假的 `GmailApp`/`DriveApp`/`Utilities`/`PropertiesService` 物件測試純邏輯，或在沒有 `setTimeout` 的 `vm` context 中載入 `src/pdf-lib.js` 模擬 Apps Script 測解密。
+沒有測試框架。程式只能在 Apps Script 上實際執行（`runBillProcessor`、`cleanupProcessedThreads`、`setupTriggers`）。本機驗證的做法是用 Node 的 `vm` 在同一個 context 依序載入 `src/config.js`、`src/processor.js`，以假的 `GmailApp`/`DriveApp`/`Utilities`/`PropertiesService` 物件測試純邏輯，或在沒有 `setTimeout` 的 `vm` context 中載入 `src/pdf-lib.js` 模擬 Apps Script 測解密。
 
 ## 架構
 
-所有邏輯都在 `src/processor.js`，不使用外部 Apps Script 函式庫（曾用 Gmail Processor 函式庫，因流程與陷阱過多而移除）。上方「設定區」的常數（`DRY_RUN`、`CLEANUP_DRY_RUN`、`PROCESSED_LABEL`、`MAX_BATCH_SIZE`、`CLEANUP_AFTER_DAYS`）和 `BANKS` 陣列是使用者主要修改的地方。
+邏輯在 `src/processor.js`，設定在 `src/config.js`（Apps Script 所有檔案共用全域範圍，設定只在函式內被讀取，載入順序不影響）。不使用外部 Apps Script 函式庫（曾用 Gmail Processor 函式庫，因流程與陷阱過多而移除）。`src/config.js` 的常數（`DRY_RUN`、`CLEANUP_DRY_RUN`、`PROCESSED_LABEL`、`MAX_BATCH_SIZE`、`CLEANUP_AFTER_DAYS`）和 `BANKS` 陣列是使用者主要修改的地方。README 分英文（`README.md`）與繁體中文（`README.zh-TW.md`），修改設定欄位時兩份都要同步。
 
 ### 處理流程（`runBillProcessor`）
 
