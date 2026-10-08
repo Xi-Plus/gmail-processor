@@ -16,7 +16,7 @@ Google Apps Script 專案：從 Gmail 找出帳單郵件，把（通常有密碼
 
 1. 用 `query` 搜尋還沒有 `bills-archived` 標籤的郵件（每次最多 `MAX_BATCH_SIZE` 封），再用 `subject` 過濾標題
 2. 逐封郵件處理每個 PDF 附件：Drive 裡還沒有對應檔案時，用指令碼屬性中的密碼解密，存到 `folder`
-3. 該封郵件所有附件都有檔案後，才貼上 `bills-archived` 標籤；有任何失敗就不貼，下次再試
+3. 該封郵件所有附件都有檔案後，才貼上 `bills-archived` 標籤並標為已讀；有任何失敗就不貼，下次再試
 
 `cleanupProcessedThreads()` 找出已貼標籤且超過 `CLEANUP_AFTER_DAYS` 天的郵件，確認每個附件都在 Drive 找得到檔案後，才移到垃圾桶（30 天內可從 Gmail 垃圾桶救回）。
 

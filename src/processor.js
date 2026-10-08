@@ -9,7 +9,7 @@
  *     每家銀行找還沒有 PROCESSED_LABEL 標籤的帳單郵件（最多 MAX_BATCH_SIZE 封），逐封：
  *       1. 每個符合規則的 PDF 附件：Drive 裡還沒有對應檔案時，解密後存到 bank.folder/<檔名>
  *          （沒設 passwordProperty 的銀行 PDF 未加密，直接存檔）
- *       2. 每個附件都有檔案時，才貼上 PROCESSED_LABEL
+ *       2. 每個附件都有檔案時，才貼上 PROCESSED_LABEL 並標為已讀
  *   已貼標籤的郵件不會再處理；沒貼上標籤的（例如解密失敗）每次執行都會從郵件附件重試
  *   要重新處理：在 Gmail 移除標籤，並刪除 Drive 中的檔案
  *   cleanupProcessedThreads() 確認 Drive 裡真的有檔案後，才把郵件移到垃圾桶（30 天內可救回）
@@ -109,7 +109,8 @@ async function runBillProcessor() {
         continue;
       }
       thread.addLabel(label);
-      console.log(`[已貼標籤] ${bank.name}：${subject}${note}`);
+      thread.markRead();
+      console.log(`[已貼標籤並標為已讀]${bank.name}：${subject}${note}`);
     }
   }
 }

@@ -16,7 +16,7 @@ For each bill configuration, `runBillProcessor()`:
 
 1. Searches with `query` for emails without the `bills-archived` label (up to `MAX_BATCH_SIZE` per run), then filters by `subject`
 2. For each PDF attachment, if Drive doesn't already have the file, decrypts it with the password from Script Properties and saves it to `folder`
-3. Adds the `bills-archived` label only after every attachment in the email has a file; otherwise leaves it for the next run
+3. Adds the `bills-archived` label and marks the email as read only after every attachment in the email has a file; otherwise leaves it for the next run
 
 `cleanupProcessedThreads()` finds labeled emails older than `CLEANUP_AFTER_DAYS` days and moves them to the trash (recoverable for 30 days) only if every attachment is found in Drive.
 

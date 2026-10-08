@@ -27,7 +27,7 @@ node --check src/processor.js
 
 每家銀行用 `bank.query` 加上 `-label:<PROCESSED_LABEL>` 搜尋（最多 `MAX_BATCH_SIZE` 封，再用 `subject` 過濾標題），逐封 thread：
 1. `billFiles_` 列出要存的 PDF 附件與目標檔名；`bank.folder`（每筆設定獨立的完整 Drive 路徑）裡已有這封郵件存的同名檔案就略過，同名檔案屬於其他郵件則記錄「檔名衝突」並不貼標籤，否則直接從郵件附件解密（沒設 `passwordProperty` 則不解密）後存檔。資料夾不存在時才建立。
-2. 每個附件都有檔案才貼 `PROCESSED_LABEL`；沒有符合附件的郵件也會貼，避免每次被重新處理。失敗的郵件不貼標籤，下次執行從郵件附件重試。
+2. 每個附件都有檔案才貼 `PROCESSED_LABEL` 並標為已讀；沒有符合附件的郵件也會貼，避免每次被重新處理。失敗的郵件不貼標籤，下次執行從郵件附件重試。
 
 超過 `MAX_RUNTIME_MS_`（5 分鐘）就不再開始處理新郵件，避開 Apps Script 6 分鐘的執行上限。
 
