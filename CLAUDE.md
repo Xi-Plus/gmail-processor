@@ -17,7 +17,7 @@ node --check src/config.js      # 本機語法檢查（一次只能檢查一個�
 node --check src/processor.js
 ```
 
-沒有測試框架。程式只能在 Apps Script 上實際執行（`runBillProcessor`、`cleanupProcessedThreads`、`setupTriggers`）。本機驗證的做法是用 Node 的 `vm` 在同一個 context 依序載入 `src/config.js`、`src/processor.js`，以假的 `GmailApp`/`DriveApp`/`Utilities`/`PropertiesService` 物件測試純邏輯，或在沒有 `setTimeout` 的 `vm` context 中載入 `src/pdf-lib.js` 模擬 Apps Script 測解密。
+沒有測試框架。程式只能在 Apps Script 上實際執行（`runBillProcessor`、`cleanupProcessedThreads`、`setupTriggers`、`testDiscordNotification`）。本機驗證的做法是用 Node 的 `vm` 在同一個 context 依序載入 `src/config.js`、`src/processor.js`，以假的 `GmailApp`/`DriveApp`/`Utilities`/`PropertiesService` 物件測試純邏輯，或在沒有 `setTimeout` 的 `vm` context 中載入 `src/pdf-lib.js` 模擬 Apps Script 測解密。
 
 ## 架構
 
@@ -30,6 +30,8 @@ node --check src/processor.js
 2. 每個附件都有檔案才貼 `PROCESSED_LABEL` 並標為已讀；沒有符合附件的郵件也會貼，避免每次被重新處理。失敗的郵件不貼標籤，下次執行從郵件附件重試。
 
 超過 `MAX_RUNTIME_MS_`（5 分鐘）就不再開始處理新郵件，避開 Apps Script 6 分鐘的執行上限。
+
+主流程在 `processBills_`，`runBillProcessor` 用 `finally` 呼叫 `notifyDiscord_`（含時間不足提早結束），有新存的檔案或錯誤時以 Discord webhook 傳送通知，附檔案與資料夾的 Drive 連結（訊息上限 2000 字，文字要用 `escapeMarkdown_` 跳脫）。不用 Google Chat 是因為個人 Gmail 帳號無法建立 Chat webhook。webhook 網址存在指令碼屬性 `DISCORD_WEBHOOK_PROPERTY`（未設定就略過），需要 `script.external_request` scope。
 
 ### pdf-lib 解密的陷阱（`decryptPdf_` / `removeEncryptionLeftovers_`）
 

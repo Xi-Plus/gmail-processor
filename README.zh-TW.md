@@ -9,6 +9,7 @@ Google Apps Script 專案：從 Gmail 找出帳單郵件，把（通常有密碼
 - 銀行換過密碼時，可依帳單年月選用不同密碼
 - 只有附件全部存檔成功才標記為已處理；失敗的郵件下次執行會自動重試
 - 清理郵件前會再次確認 Drive 裡有對應檔案
+- 可選用 Discord 通知，附上新存檔案的 Drive 連結
 
 ## 運作方式
 
@@ -17,6 +18,7 @@ Google Apps Script 專案：從 Gmail 找出帳單郵件，把（通常有密碼
 1. 用 `query` 搜尋還沒有 `bills-archived` 標籤的郵件（每次最多 `MAX_BATCH_SIZE` 封），再用 `subject` 過濾標題
 2. 逐封郵件處理每個 PDF 附件：Drive 裡還沒有對應檔案時，用指令碼屬性中的密碼解密，存到 `folder`
 3. 該封郵件所有附件都有檔案後，才貼上 `bills-archived` 標籤並標為已讀；有任何失敗就不貼，下次再試
+4. 有新存的檔案或發生錯誤時，傳送 Discord 通知，列出存檔的檔案（含 Drive 連結）與錯誤
 
 `cleanupProcessedThreads()` 找出已貼標籤且超過 `CLEANUP_AFTER_DAYS` 天的郵件，確認每個附件都在 Drive 找得到檔案後，才移到垃圾桶（30 天內可從 Gmail 垃圾桶救回）。
 
@@ -57,6 +59,8 @@ Google Apps Script 專案：從 Gmail 找出帳單郵件，把（通常有密碼
 
    密碼只存在指令碼屬性中，不會出現在程式碼裡。
 
+5. （選用）要收到 Discord 通知，在 Discord 頻道建立 webhook（「編輯頻道 > 整合 > Webhook > 新 Webhook」），複製網址存到指令碼屬性 `DISCORD_WEBHOOK_URL`。沒設定就不通知。在 Apps Script 編輯器執行 `testDiscordNotification` 可傳送範例訊息，確認設定正確。
+
 ## 設定
 
 所有設定都在 [src/config.js](src/config.js)，程式邏輯在 [src/processor.js](src/processor.js)。
@@ -68,6 +72,7 @@ Google Apps Script 專案：從 Gmail 找出帳單郵件，把（通常有密碼
 | `PROCESSED_LABEL` | 已處理郵件的 Gmail 標籤（預設 `bills-archived`） |
 | `MAX_BATCH_SIZE` | 每次執行每筆帳單最多處理幾封郵件 |
 | `CLEANUP_AFTER_DAYS` | 郵件處理後幾天才清理 |
+| `DISCORD_WEBHOOK_PROPERTY` | 存 Discord webhook 網址的指令碼屬性名稱（預設 `DISCORD_WEBHOOK_URL`），屬性未設定就不通知 |
 
 ### 帳單設定 `BANKS`
 
@@ -145,7 +150,7 @@ body: "附件為您(?<year>\\d{4})/(?<month>\\d{1,2})的證券月對帳單",
 
 ## 執行
 
-1. 先把 `DRY_RUN` 設為 `true`，push 後在 Apps Script 編輯器執行 `runBillProcessor`，第一次會要求授權 Gmail 與 Drive
+1. 先把 `DRY_RUN` 設為 `true`，push 後在 Apps Script 編輯器執行 `runBillProcessor`，第一次會要求授權 Gmail、Drive 與外部連線（Discord 通知用）
 2. 檢查執行記錄中的 `[模擬存檔]` 檔名是否正確
 3. 確認無誤後把 `DRY_RUN` 改回 `false` 再執行一次，確認 Drive 有檔案、郵件有貼標籤
 4. 執行一次 `setupTriggers` 建立排程：每 6 小時處理帳單、每天凌晨 3 點清理
@@ -161,6 +166,9 @@ body: "附件為您(?<year>\\d{4})/(?<month>\\d{1,2})的證券月對帳單",
 | `[檔名衝突] …` | 另一封郵件已用了這個檔名，調整 `attachment` |
 | `[未貼標籤] …` | 這封郵件有附件沒存成功，下次執行會再試 |
 | `[時間不足] …` | 接近 Apps Script 6 分鐘上限，剩下的郵件留到下次 |
+| `[未通知] …` | Discord webhook 的指令碼屬性未設定 |
+| `[通知失敗] …` | 傳送 Discord 通知失敗 |
+| `[已通知] Discord` | Discord 通知已送出 |
 
 ### 重新處理
 

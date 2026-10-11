@@ -21,6 +21,12 @@ const MAX_BATCH_SIZE = 10;
 const CLEANUP_AFTER_DAYS = 7;
 
 /**
+ * 存 Discord webhook 網址的指令碼屬性名稱；有新存的檔案或錯誤時傳送通知（含 Drive 連結）。
+ * 屬性未設定就不通知
+ */
+const DISCORD_WEBHOOK_PROPERTY = "DISCORD_WEBHOOK_URL";
+
+/**
  * 每家帳單一筆設定
  *   name:             名稱，用於 log
  *   folder:           存檔的 Drive 資料夾路徑（例如 "/archive/帳單/台新信用卡"），不存在時自動建立；

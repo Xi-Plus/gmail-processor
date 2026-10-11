@@ -9,6 +9,7 @@ A Google Apps Script project that finds bill emails in Gmail, decrypts their (us
 - Choose a different password by bill year/month when a bank changes it
 - An email is marked processed only after all its attachments are saved; failures are retried on the next run
 - Cleanup checks Drive for the saved files again before deleting any email
+- Optional Discord notification with Drive links to newly saved files
 
 ## How it works
 
@@ -17,6 +18,7 @@ For each bill configuration, `runBillProcessor()`:
 1. Searches with `query` for emails without the `bills-archived` label (up to `MAX_BATCH_SIZE` per run), then filters by `subject`
 2. For each PDF attachment, if Drive doesn't already have the file, decrypts it with the password from Script Properties and saves it to `folder`
 3. Adds the `bills-archived` label and marks the email as read only after every attachment in the email has a file; otherwise leaves it for the next run
+4. If any files were saved or any errors occurred, sends a Discord notification listing the saved files (with Drive links) and the errors
 
 `cleanupProcessedThreads()` finds labeled emails older than `CLEANUP_AFTER_DAYS` days and moves them to the trash (recoverable for 30 days) only if every attachment is found in Drive.
 
@@ -57,6 +59,8 @@ Requires Node.js and a Google account.
 
    Passwords live only in Script Properties, never in the code.
 
+5. (Optional) For Discord notifications, create a webhook in a Discord channel (**Edit Channel > Integrations > Webhooks > New Webhook**), copy its URL, and store it in the `DISCORD_WEBHOOK_URL` Script Property. Without it, no notification is sent. Run `testDiscordNotification` in the Apps Script editor to send a sample message and check the setup.
+
 ## Configuration
 
 All settings are in [src/config.js](src/config.js); the logic is in [src/processor.js](src/processor.js).
@@ -68,6 +72,7 @@ All settings are in [src/config.js](src/config.js); the logic is in [src/process
 | `PROCESSED_LABEL` | Gmail label for processed emails (default `bills-archived`) |
 | `MAX_BATCH_SIZE` | Maximum emails per bill configuration per run |
 | `CLEANUP_AFTER_DAYS` | Days after processing before an email is cleaned up |
+| `DISCORD_WEBHOOK_PROPERTY` | Script Property name holding the Discord webhook URL (default `DISCORD_WEBHOOK_URL`); notifications are skipped if it's not set |
 
 ### Bill configurations: `BANKS`
 
@@ -145,7 +150,7 @@ The file name is how "already saved" is detected, so different emails must produ
 
 ## Running
 
-1. Set `DRY_RUN` to `true`, push, and run `runBillProcessor` in the Apps Script editor. The first run asks for Gmail and Drive authorization
+1. Set `DRY_RUN` to `true`, push, and run `runBillProcessor` in the Apps Script editor. The first run asks for Gmail, Drive, and external request (for Discord) authorization
 2. Check that the `[模擬存檔]` (simulated save) file names in the execution log look right
 3. Set `DRY_RUN` back to `false` and run again; confirm the files are in Drive and the emails are labeled
 4. Run `setupTriggers` once to schedule processing every 6 hours and cleanup daily at 3 AM
@@ -163,6 +168,9 @@ Log messages are in Traditional Chinese:
 | `[檔名衝突] …` | Another email already uses this file name; adjust `attachment` |
 | `[未貼標籤] …` | Some attachment wasn't saved; retried on the next run |
 | `[時間不足] …` | Near the 6-minute Apps Script limit; remaining emails wait for the next run |
+| `[未通知] …` | The Discord webhook Script Property isn't set |
+| `[通知失敗] …` | Sending the Discord notification failed |
+| `[已通知] Discord` | The Discord notification was sent |
 
 ### Reprocessing
 

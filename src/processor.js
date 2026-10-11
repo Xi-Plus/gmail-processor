@@ -10,6 +10,7 @@
  *       1. 每個符合規則的 PDF 附件：Drive 裡還沒有對應檔案時，解密後存到 bank.folder/<檔名>
  *          （沒設 passwordProperty 的銀行 PDF 未加密，直接存檔）
  *       2. 每個附件都有檔案時，才貼上 PROCESSED_LABEL 並標為已讀
+ *     結束後有新存的檔案或錯誤時，傳送 Discord 通知（含 Drive 連結）
  *   已貼標籤的郵件不會再處理；沒貼上標籤的（例如解密失敗）每次執行都會從郵件附件重試
  *   要重新處理：在 Gmail 移除標籤，並刪除 Drive 中的檔案
  *   cleanupProcessedThreads() 確認 Drive 裡真的有檔案後，才把郵件移到垃圾桶（30 天內可救回）
@@ -35,8 +36,19 @@ const MAX_RUNTIME_MS_ = 5 * 60 * 1000;
  * 每家銀行找還沒有 PROCESSED_LABEL 的帳單郵件，逐封存檔（必要時解密），全部附件都有檔案才貼標籤。
  * 沒有符合附件的郵件也會貼上，避免每次都被重新處理（清理時仍會保留）。
  * 存檔或解密失敗只記錄錯誤，郵件沒貼標籤，下次執行會再試。
+ * 結束時（包含時間不足提早結束）把新存的檔案與錯誤傳到 Discord。
  */
 async function runBillProcessor() {
+  const saved = []; // [{ bank, fileName, url }]
+  const failures = []; // 錯誤訊息
+  try {
+    await processBills_(saved, failures);
+  } finally {
+    notifyDiscord_(saved, failures);
+  }
+}
+
+async function processBills_(saved, failures) {
   BANKS.forEach(validateBank_);
   const startTime = Date.now();
   const props = PropertiesService.getScriptProperties();
@@ -70,6 +82,7 @@ async function runBillProcessor() {
           if (status === "conflict") {
             allSaved = false;
             console.error(`[檔名衝突] ${bank.name}/${fileName} 已被其他郵件使用，請調整 attachment 的檔名`);
+            failures.push(`[檔名衝突] ${bank.name}/${fileName}`);
             continue;
           }
 
@@ -88,13 +101,15 @@ async function runBillProcessor() {
               bytes = await decryptPdf_(bytes, password);
             }
             bankFolder = bankFolder || createFolderByPath_(bank.folder);
-            bankFolder
+            const file = bankFolder
               .createFile(Utilities.newBlob(bytes, "application/pdf", fileName))
               .setDescription(SOURCE_PREFIX_ + msg.getId());
+            saved.push({ bank, fileName, url: file.getUrl() });
             console.log(`[已存檔] ${bank.name}/${fileName}${note}`);
           } catch (e) {
             allSaved = false;
             console.error(`[存檔失敗] ${bank.name}/${fileName}${note}：${e}`);
+            failures.push(`[存檔失敗] ${bank.name}/${fileName}${note}：${e}`);
           }
         }
       }
@@ -206,6 +221,82 @@ function yearMonthFromText_(pattern, text) {
 function passwordPropertyFor_(bank, ym) {
   const p = bank.passwordProperty;
   return (typeof p === "function" ? p(ym.year, ym.month) : p) || null;
+}
+
+// ===================== Discord 通知 =====================
+
+/** Discord 訊息內容的長度上限 */
+const DISCORD_MAX_LENGTH_ = 2000;
+
+/**
+ * 把新存的檔案（附 Drive 連結）與錯誤傳到 Discord webhook。
+ * 都沒有就不傳；webhook 網址存在指令碼屬性 DISCORD_WEBHOOK_PROPERTY，未設定則略過。
+ * 通知失敗只記錄錯誤，不影響存檔結果。
+ */
+function notifyDiscord_(saved, failures) {
+  if (saved.length === 0 && failures.length === 0) return;
+  const url = PropertiesService.getScriptProperties().getProperty(DISCORD_WEBHOOK_PROPERTY);
+  if (!url) {
+    console.log(`[未通知] 指令碼屬性 ${DISCORD_WEBHOOK_PROPERTY} 未設定`);
+    return;
+  }
+
+  const lines = [];
+  if (saved.length > 0) {
+    lines.push(`**帳單已存檔 ${saved.length} 個檔案**`);
+    for (const { bank, fileName, url: fileUrl } of saved) {
+      lines.push(`- ${escapeMarkdown_(bank.name)}：[${escapeMarkdown_(fileName)}](${fileUrl})`);
+    }
+    // 同一個資料夾只列一次
+    const folders = [...new Set(saved.map(({ bank }) => bank.folder))];
+    for (const path of folders) {
+      const folder = getFolderByPath_(path);
+      if (folder) lines.push(`📁 [${escapeMarkdown_(path)}](${folder.getUrl()})`);
+    }
+  }
+  if (failures.length > 0) {
+    if (lines.length > 0) lines.push("");
+    lines.push(`**有 ${failures.length} 個錯誤（郵件未貼標籤，下次執行再試）**`);
+    failures.forEach((f) => lines.push(`- ${escapeMarkdown_(f)}`));
+  }
+
+  let content = lines.join("\n");
+  if (content.length > DISCORD_MAX_LENGTH_) {
+    const more = "\n…（訊息過長，其餘見執行記錄）";
+    content = content.slice(0, DISCORD_MAX_LENGTH_ - more.length) + more;
+  }
+
+  try {
+    const res = UrlFetchApp.fetch(url, {
+      method: "post",
+      contentType: "application/json; charset=UTF-8",
+      // flags 4 = SUPPRESS_EMBEDS，不顯示 Drive 連結的預覽
+      payload: JSON.stringify({ content, flags: 4 }),
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code < 200 || code >= 300) {
+      console.error(`[通知失敗] Discord 回應 ${code}：${res.getContentText()}`);
+    } else {
+      console.log("[已通知] Discord");
+    }
+  } catch (e) {
+    console.error(`[通知失敗] ${e}`);
+  }
+}
+
+/** 手動執行：用範例資料傳一則 Discord 通知，確認 webhook 設定正確（不會動到郵件或檔案） */
+function testDiscordNotification() {
+  const root = DriveApp.getRootFolder();
+  notifyDiscord_(
+    [{ bank: { name: "測試", folder: "/" }, fileName: "2025-04_測試帳單.pdf", url: root.getUrl() }],
+    ["[存檔失敗] 測試/2025-04_測試帳單.pdf：這是測試訊息"]
+  );
+}
+
+/** 跳脫 Discord Markdown 符號，避免檔名中的 _ 等字元被當成格式 */
+function escapeMarkdown_(text) {
+  return String(text).replace(/[\\*_~`|[\]]/g, "\\$&");
 }
 
 // ===================== 解密 =====================
